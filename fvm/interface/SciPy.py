@@ -111,7 +111,7 @@ class Interface(BaseInterface):
 
         for i in range(border_size):
             for j in range(jac.n):
-                coA[idx] = self.border_scaling * _get_value(W, j, i)
+                coA[idx] = self.border_scaling * _get_value(W, j, i).conj()
                 jcoA[idx] = j
                 idx += 1
 
