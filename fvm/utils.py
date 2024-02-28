@@ -2,6 +2,11 @@ import numpy
 
 from math import sqrt
 
+# including additions to plot temperature by Ties Leenstra, 5-5-2023:
+#   compute_temperature
+#   compute_volume_averaged_temperature
+#   get_t_value
+
 def dot(x, y):
     try:
         return x.T.conj() @ y
@@ -198,6 +203,65 @@ def compute_velocity_magnitude(state, interface, axis=2, position=None):
 
     return m
 
+def compute_temperature(state, interface, axis=2, position=None):
+    # added by Ties Leenstra
+
+    nx = interface.discretization.nx
+    ny = interface.discretization.ny
+    nz = interface.discretization.nz
+
+    x = interface.discretization.x
+    y = interface.discretization.y
+    z = interface.discretization.z
+
+    state_mtx = create_padded_state_mtx(state, interface=interface)
+
+    # FIXME: This assumes zero or periodic boundaries
+    if axis == 0:
+        m = numpy.zeros((ny, nz))
+
+        center = nx // 2 - 1
+        if position:
+            center = numpy.argmin(numpy.abs(x - position))
+
+        print('Using center: %e at %d' % (x[center], center))
+
+        for j in range(ny):
+            for k in range(nz):
+                m[j, k] = get_t_value(state_mtx, center, j, k, interface)
+
+        return m
+
+    if axis == 1:
+        m = numpy.zeros((nx, nz))
+
+        center = ny // 2 - 1
+        if position:
+            center = numpy.argmin(numpy.abs(y - position))
+
+        print('Using center: %e at %d' % (y[center], center))
+
+        for i in range(nx):
+            for k in range(nz):
+                m[i, k] = get_t_value(state_mtx, i, center, k, interface)
+
+
+        return m
+
+    m = numpy.zeros((nx, ny))
+
+    center = nz // 2 - 1
+    if position:
+        center = numpy.argmin(numpy.abs(z - position))
+
+    print('Using center: %e at %d' % (z[center], center))
+
+    for i in range(nx):
+        for j in range(ny):
+            m[i, j] = get_t_value(state_mtx, i, j, center, interface)
+
+    return m
+
 def compute_streamfunction(state, interface, axis=2):
     x = interface.discretization.x
     y = interface.discretization.y
@@ -236,39 +300,6 @@ def compute_streamfunction(state, interface, axis=2):
                 psiv[i, j] += psiv[i, j-1]
 
     return (psiu - psiv) / 2
-
-def compute_vorticity(state, interface, axis=2):
-    x = interface.discretization.x
-    y = interface.discretization.y
-
-    nx = interface.discretization.nx
-    ny = interface.discretization.ny
-
-    state_mtx = create_padded_state_mtx(state, interface=interface)
-
-    center = interface.discretization.nz // 2 + 1
-    u = state_mtx[1:, 1:, center, 0]
-    v = state_mtx[1:, 1:, center, 1]
-
-    assert axis == 2
-
-    zeta = numpy.zeros((nx, ny))
-
-    # Integration using the midpoint rule
-    for i in range(nx):
-        for j in range(ny):
-            dx = (x[i+1] - x[i-1]) / 2
-            dy = (y[j+1] - y[j-1]) / 2
-
-            if i < nx - 1:
-                zeta[i, j] += v[i+1, j] / dx
-                zeta[i, j] -= v[i, j] / dx
-
-            if j < ny - 1:
-                zeta[i, j] += u[i, j+1] / dy
-                zeta[i, j] -= u[i, j] / dy
-
-    return zeta
 
 def compute_volume_averaged_kinetic_energy(state, interface):
     x = interface.discretization.x
@@ -309,6 +340,42 @@ def compute_volume_averaged_kinetic_energy(state, interface):
                 Ek += (u * u + v * v + w * w) * dx * dy * dz
 
     return Ek / 2
+
+def compute_volume_averaged_temperature(state, interface):
+    # added by Ties Leenstra
+
+    x = interface.discretization.x
+    y = interface.discretization.y
+    z = interface.discretization.z
+
+    nx = interface.discretization.nx
+    ny = interface.discretization.ny
+    nz = interface.discretization.nz
+
+    if nx <= 1:
+        assert x[0] - x[-1] == 1
+
+    if ny <= 1:
+        assert y[0] - y[-1] == 1
+
+    if nz <= 1:
+        assert z[0] - z[-1] == 1
+
+    state_mtx = create_padded_state_mtx(state, interface=interface)
+
+    Et = 0
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                dx = x[i] - x[i-1]
+                dy = y[j] - y[j-1]
+                dz = z[k] - z[k-1]
+
+                T = (3*state_mtx[i+1, j+1, k+1, 3] + state_mtx[i, j+1, k+1, 3] + state_mtx[i+1, j, k+1, 3] + state_mtx[i+1, j+1, k, 3] ) / 6
+
+                Et += T * dx * dy * dz
+
+    return Et
 
 def get_u_value(state, i, j, k, interface):
     '''Get the value of u at a grid point.'''
@@ -372,3 +439,27 @@ def get_w_value(state, i, j, k, interface):
     dy2 = (y[j+1] - y[j]) / 2
 
     return (w1 * dy1 + w2 * dy2) / (dy1 + dy2)
+
+def get_t_value(state, i, j, k, interface):
+    # added by Ties Leenstra
+
+    '''Get the value of t at a grid point.'''
+
+    if len(state.shape) < 4:
+        state_mtx = create_padded_state_mtx(state, interface=interface)
+    else:
+        state_mtx = state
+
+    x = interface.discretization.x
+    dx1 = (x[i] - x[i-1]) / 2
+    dx2 = (x[i+1] - x[i]) / 2
+
+    t1 = (state_mtx[i+1, j+1, k+1, 3] * dx1 + state_mtx[i+2, j+1, k+1, 3] * dx2) / (dx1 + dx2)
+    t2 = (state_mtx[i+1, j+2, k+1, 3] * dx1 + state_mtx[i+2, j+2, k+1, 3] * dx2) / (dx1 + dx2)
+
+    y = interface.discretization.y
+    dy1 = (y[j] - y[j-1]) / 2
+    dy2 = (y[j+1] - y[j]) / 2
+
+    return (t1 * dy1 + t2 * dy2) / (dy1 + dy2)
+

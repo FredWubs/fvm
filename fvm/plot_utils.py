@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from fvm import utils
 from fvm.utils import create_state_mtx # noqa: F401
 
+# including additions to plot temperature by Ties Leenstra, 5-5-2023:
+#   plot_temperature()
+
 def get_meshgrid(interface, x=None, y=None):
     if x is None:
         x = interface.discretization.x[:-3]
@@ -60,15 +63,16 @@ def plot_velocity_magnitude(state, interface, axis=2, position=None, title='Velo
 
     return plot_contour(x, y, m, axis=axis, title=title, *args, **kwargs)
 
-def plot_streamfunction(state, interface, axis=2, title='Streamfunction', *args, **kwargs):
-    psi = utils.compute_streamfunction(state, interface, axis)
+def plot_temperature(state, interface, axis=2, position=None, title='Temperature magnitude', *args, **kwargs):
+    # added by Ties Leenstra
+    m = utils.compute_temperature(state, interface, axis, position)
 
     x, y = get_meshgrid(interface)
 
-    return plot_contour(x, y, psi, axis=axis, title=title, *args, **kwargs)
+    return plot_contour(x, y, m, axis=axis, title=title, *args, **kwargs)
 
-def plot_vorticity(state, interface, axis=2, title='Vorticity', *args, **kwargs):
-    psi = utils.compute_vorticity(state, interface, axis)
+def plot_streamfunction(state, interface, axis=2, title='Streamfunction', *args, **kwargs):
+    psi = utils.compute_streamfunction(state, interface, axis)
 
     x, y = get_meshgrid(interface)
 
