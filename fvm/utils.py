@@ -261,6 +261,64 @@ def compute_temperature(state, interface, axis=2, position=None):
             m[i, j] = get_t_value(state_mtx, i, j, center, interface)
 
     return m
+def compute_pressure(state, interface, axis=2, position=None):
+    # added by Ties Leenstra
+
+    nx = interface.discretization.nx
+    ny = interface.discretization.ny
+    nz = interface.discretization.nz
+
+    x = interface.discretization.x
+    y = interface.discretization.y
+    z = interface.discretization.z
+
+    state_mtx = create_padded_state_mtx(state, interface=interface)
+
+    # FIXME: This assumes zero or periodic boundaries
+    if axis == 0:
+        m = numpy.zeros((ny, nz))
+
+        center = nx // 2 - 1
+        if position:
+            center = numpy.argmin(numpy.abs(x - position))
+
+        print('Using center: %e at %d' % (x[center], center))
+
+        for j in range(ny):
+            for k in range(nz):
+                m[j, k] = get_t_value(state_mtx, center, j, k, interface)
+
+        return m
+
+    if axis == 1:
+        m = numpy.zeros((nx, nz))
+
+        center = ny // 2 - 1
+        if position:
+            center = numpy.argmin(numpy.abs(y - position))
+
+        print('Using center: %e at %d' % (y[center], center))
+
+        for i in range(nx):
+            for k in range(nz):
+                m[i, k] = get_t_value(state_mtx, i, center, k, interface)
+
+
+        return m
+
+    m = numpy.zeros((nx, ny))
+
+    center = nz // 2 - 1
+    if position:
+        center = numpy.argmin(numpy.abs(z - position))
+
+    print('Using center: %e at %d' % (z[center], center))
+
+    for i in range(nx):
+        for j in range(ny):
+            m[i, j] = get_t_value(state_mtx, i, j, center, interface)
+
+    return m
 
 def compute_streamfunction(state, interface, axis=2):
     x = interface.discretization.x
@@ -440,7 +498,7 @@ def get_w_value(state, i, j, k, interface):
 
     return (w1 * dy1 + w2 * dy2) / (dy1 + dy2)
 
-def get_t_value(state, i, j, k, interface):
+def old_get_t_value(state, i, j, k, interface):
     # added by Ties Leenstra
 
     '''Get the value of t at a grid point.'''
@@ -463,3 +521,24 @@ def get_t_value(state, i, j, k, interface):
 
     return (t1 * dy1 + t2 * dy2) / (dy1 + dy2)
 
+def get_t_value(state, i, j, k, interface):
+    # added by Fred
+
+    '''Get the value of t at a grid point.'''
+
+    if len(state.shape) < 4:
+        state_mtx = create_padded_state_mtx(state, interface=interface)
+    else:
+        state_mtx = state
+    return state_mtx[i+1, j+1, k+1, 3]
+
+def get_p_value(state, i, j, k, interface):
+    # added by Fred
+
+    '''Get the value of t at a grid point.'''
+
+    if len(state.shape) < 4:
+        state_mtx = create_padded_state_mtx(state, interface=interface)
+    else:
+        state_mtx = state
+    return state_mtx[i+1, j+1, k+1, 2]

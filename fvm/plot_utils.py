@@ -63,9 +63,17 @@ def plot_velocity_magnitude(state, interface, axis=2, position=None, title='Velo
 
     return plot_contour(x, y, m, axis=axis, title=title, *args, **kwargs)
 
-def plot_temperature(state, interface, axis=2, position=None, title='Temperature magnitude', *args, **kwargs):
+def plot_temperature(state, interface, axis=2, position=None, title='Temperature', *args, **kwargs):
     # added by Ties Leenstra
     m = utils.compute_temperature(state, interface, axis, position)
+
+    x, y = get_meshgrid(interface)
+
+    return plot_contour(x, y, m, axis=axis, title=title, *args, **kwargs)
+
+def plot_pressure(state, interface, axis=2, position=None, title='Pressure', *args, **kwargs):
+    # added by Fred
+    m = utils.compute_pressure(state, interface, axis, position)
 
     x, y = get_meshgrid(interface)
 
