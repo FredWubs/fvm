@@ -301,7 +301,7 @@ def compute_pressure(state, interface, axis=2, position=None):
 
         for i in range(nx):
             for k in range(nz):
-                m[i, k] = get_t_value(state_mtx, i, center, k, interface)
+                m[i, k] = get_p_value(state_mtx, i, center, k, interface)
 
 
         return m
@@ -316,7 +316,7 @@ def compute_pressure(state, interface, axis=2, position=None):
 
     for i in range(nx):
         for j in range(ny):
-            m[i, j] = get_t_value(state_mtx, i, j, center, interface)
+            m[i, j] = get_p_value(state_mtx, i, j, center, interface)
 
     return m
 

@@ -139,11 +139,11 @@ class Continuation:
 
         return x, mu
 
-    def adjust_step_size(self, ds):
+    def adjust_step_size(self, ds, min_step_size, max_step_size):
         ''' Step size control, see [Seydel p 188.] '''
 
-        min_step_size = self.parameters.get('Minimum Step Size', 0.01)
-        max_step_size = self.parameters.get('Maximum Step Size', 2000)
+        min_step_size = self.parameters.get('Minimum Step Size', min_step_size )
+        max_step_size = self.parameters.get('Maximum Step Size', max_step_size )
         optimal_newton_iterations = self.parameters.get('Optimal Newton Iterations', 3)
 
         factor = optimal_newton_iterations / max(self.newton_iterations, 1)
@@ -197,7 +197,7 @@ class Continuation:
 
         return x, mu
 
-    def step(self, parameter_name, x, mu, dx, dmu, ds):
+    def step(self, parameter_name, x, mu, dx, dmu, ds, min_step_size,max_step_size):
         ''' Perform one step of the continuation '''
 
         mu0 = mu
@@ -213,7 +213,7 @@ class Continuation:
         if mu == mu0:
             # No convergence was achieved, adjusting the step size
             prev_ds = ds
-            ds = self.adjust_step_size(ds)
+            ds = self.adjust_step_size(ds,min_step_size,max_step_size)
             if prev_ds == ds:
                 raise Exception('Newton cannot achieve convergence')
 
@@ -307,7 +307,7 @@ class Continuation:
 
     def continuation(self, x0, parameter_name, start, target, ds,
                      dx=None, dmu=None,
-                     maxit=None, switched_branches=False):
+                     maxit=None, switched_branches=False, last_ds=False):
         '''Perform a pseudo-arclength continuation in parameter_name from
         parameter value start to target with arclength step size ds,
         and starting from an initial state x0.
@@ -325,6 +325,8 @@ class Continuation:
 
         x = x0
         mu = start
+        min_step_size=(target-start)/1000
+        max_step_size=(target-start)/5
 
         # Set some parameters
         self.delta = self.parameters.get('Delta', 1)
@@ -351,7 +353,7 @@ class Continuation:
         for j in range(maxit):
             mu0 = mu
 
-            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds)
+            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds, min_step_size, max_step_size)
 
             if detect_bifurcations or (enable_branch_switching and not switched_branches):
                 eig_prev = eig
@@ -378,8 +380,14 @@ class Continuation:
                 # Converge onto the end point
                 x, mu = self.converge(parameter_name, x, mu, dx, dmu, target, ds, maxit)
 
-                return x, mu
+                if last_ds:
+                   return x,mu,ds
+                else:
+                   return x, mu
 
-            ds = self.adjust_step_size(ds)
-
-        return x, mu
+            ds = self.adjust_step_size(ds,min_step_size,max_step_size)
+        print(last_ds)
+        if last_ds:
+          return x,mu,ds
+        else:
+          return x, mu
