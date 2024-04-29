@@ -78,7 +78,8 @@ class Continuation:
                 print('Newton corrector converged in %d iterations with ||F||=%e' % (k, fnorm), flush=True)
                 break
 
-            if residual_check == 'F' and prev_norm is not None and prev_norm < fnorm:
+            if residual_check == 'F' and prev_norm is not None and 2*prev_norm <fnorm:
+                print(prev_norm,fnorm)
                 self.newton_iterations = maxit
                 break
 
@@ -132,6 +133,7 @@ class Continuation:
                 break
 
         if self.newton_iterations == maxit:
+            print(maxit)
             print('Newton did not converge. Adjusting step size and trying again', flush=True)
             return x0, mu0
 
@@ -197,7 +199,7 @@ class Continuation:
 
         return x, mu
 
-    def step(self, parameter_name, x, mu, dx, dmu, ds, min_step_size,max_step_size):
+    def step(self, parameter_name, x, mu, dx, dmu, ds, min_step_size=None, max_step_size=None):
         ''' Perform one step of the continuation '''
 
         mu0 = mu
@@ -214,10 +216,13 @@ class Continuation:
             # No convergence was achieved, adjusting the step size
             prev_ds = ds
             ds = self.adjust_step_size(ds,min_step_size,max_step_size)
+            print(prev_ds,ds)
+            print(min_step_size)
+            print(max_step_size)
             if prev_ds == ds:
                 raise Exception('Newton cannot achieve convergence')
 
-            return self.step(parameter_name, x0, mu0, dx, dmu, ds)
+            return self.step(parameter_name, x0, mu0, dx, dmu, ds, min_step_size, max_step_size)
 
         print("%s: %f" % (parameter_name, mu), flush=True)
 
@@ -353,7 +358,7 @@ class Continuation:
         for j in range(maxit):
             mu0 = mu
 
-            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds, min_step_size, max_step_size)
+            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds, min_step_size=min_step_size, max_step_size=max_step_size)
 
             if detect_bifurcations or (enable_branch_switching and not switched_branches):
                 eig_prev = eig
