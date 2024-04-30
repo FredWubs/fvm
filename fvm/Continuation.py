@@ -1,7 +1,10 @@
 import math
+import scipy
+import numpy
 
 from math import sqrt
 from fvm.utils import norm
+from scipy.sparse import identity
 
 class Continuation:
 
@@ -34,7 +37,12 @@ class Continuation:
 
             jac = self.interface.jacobian(x)
             dx = self.interface.solve(jac, -fval)
-
+            if (k == 0):
+                prev_tol=tol
+                tol=tol/self.tol_check(jac,x)
+                print('tol check', prev_tol,tol)
+                
+            
             x = x + dx
 
             if residual_check != 'F' or verbose:
@@ -51,6 +59,36 @@ class Continuation:
 
         return x
 
+    def tol_check(self,jac_op,x):
+      unit_round=1e-14
+      jac=jac_op @ identity(x.size,format='csr')
+      #jac=jac_op
+      #print(jac.diagonal())
+      #detect the identity rows and romove them
+      jd = scipy.sparse.diags(jac.diagonal())
+      #print((numpy.abs(jac-jd)).sum(axis=1))
+      #sum the absolute values of each row of the off-diagonal elements
+      dumv=(numpy.abs(jac-jd)).sum(axis=1)
+      for r in range(0,x.size):                   
+        if dumv[r]==0.0:
+          jac[r,r]=0
+      #print((numpy.abs(jac[0::4,0::4])).max())
+      #print(jac[0::4,0::4].multiply(jac[0::4,0::4].sign()))
+      #print(jac[0::4,0::4].sabs().max())
+      #print(scipy.linalg.norm(jac))
+      #Compute 
+      maxJ=numpy.zeros((4,4))
+      maxx=numpy.zeros(4)
+      maxJx=numpy.zeros((4,4))
+      for r in range(0,4):
+        maxx[r]=numpy.linalg.norm(x[r::4],ord=numpy.inf) 
+        for r in range(0,4):
+          for c in  range(0,4):
+            maxJ[r,c]=(numpy.abs(jac[r::4,c::4])).max()
+            maxJx[r,c]=maxJ[r,c]*maxx[c]
+      #print('maxJ \n',maxJ,'\n maxx \n',maxx,'\n maxJx \n',maxJx)
+      return maxJx.max()
+    
     def newtoncorrector(self, parameter_name, ds, x, x0, mu, mu0):
         residual_check = self.parameters.get('Residual Check', 'F')
         verbose = self.parameters.get('Verbose', False)
@@ -65,6 +103,7 @@ class Continuation:
         dxnorm = None
 
         # Do the main iteration
+        scal_fact=1.0
         for k in range(maxit):
             # Compute F (RHS of 2.2.9)
             self.interface.set_parameter(parameter_name, mu)
@@ -74,7 +113,7 @@ class Continuation:
                 prev_norm = fnorm
                 fnorm = norm(fval)
 
-            if residual_check == 'F' and fnorm < tol:
+            if residual_check == 'F' and fnorm < tol*scal_fact:
                 print('Newton corrector converged in %d iterations with ||F||=%e' % (k, fnorm), flush=True)
                 break
 
@@ -89,7 +128,9 @@ class Continuation:
 
             # Compute the jacobian F_x at x (LHS of 2.2.9)
             jac = self.interface.jacobian(x)
-
+            if (k == 1):
+                scal_fact=self.tol_check(jac,x)
+                print('scaling factor', scal_fact)
             # Compute F_mu (LHS of 2.2.9)
             self.interface.set_parameter(parameter_name, mu + self.delta)
             dflval = (self.interface.rhs(x) - fval) / self.delta
@@ -304,7 +345,7 @@ class Continuation:
 
         # Scaling of the initial tangent (2.2.7)
         dmu = 1
-        nrm = sqrt(self.zeta * dx.dot(dx) + dmu ** 2)
+        nrm = sqrt(self.zeta * dx.dot(dx) + (1-self.zeta)*dmu ** 2)
         dmu /= nrm
         dx /= nrm
 
@@ -332,9 +373,9 @@ class Continuation:
         mu = start
         min_step_size=(target-start)/1000
         max_step_size=(target-start)/5
-
+        unit_round=1e-16
         # Set some parameters
-        self.delta = self.parameters.get('Delta', 1)
+        self.delta = self.parameters.get('Delta', max(abs(start),abs(target))*sqrt(unit_round))
         self.zeta = 1 / x.size
 
         if not dx or not dmu:
