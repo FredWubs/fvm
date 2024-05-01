@@ -37,10 +37,10 @@ class Continuation:
 
             jac = self.interface.jacobian(x)
             dx = self.interface.solve(jac, -fval)
-            if (k == 0):
-                prev_tol=tol
-                tol=tol/self.tol_check(jac,x)
-                print('tol check', prev_tol,tol)
+           # if (k == 0):
+           #     prev_tol=tol
+           #     tol=tol/self.tol_check(jac,x)
+           #     print('tol check', prev_tol,tol)
                 
             
             x = x + dx
@@ -191,11 +191,11 @@ class Continuation:
 
         factor = optimal_newton_iterations / max(self.newton_iterations, 1)
         factor = min(max(factor, 0.5), 2.0)
-
+        print('old ds',ds)
         ds *= factor
 
         ds = math.copysign(min(max(abs(ds), min_step_size), max_step_size), ds)
-
+        print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
         if self.parameters.get('Verbose', False):
             print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
 
@@ -373,6 +373,7 @@ class Continuation:
         mu = start
         min_step_size=(target-start)/1000
         max_step_size=(target-start)/5
+        print('max step size ',max_step_size)
         unit_round=1e-16
         # Set some parameters
         self.delta = self.parameters.get('Delta', max(abs(start),abs(target))*sqrt(unit_round))
