@@ -1,7 +1,10 @@
 import math
+import scipy
+import numpy
 
 from math import sqrt
 from fvm.utils import norm
+from scipy.sparse import identity
 
 class Continuation:
 
@@ -34,7 +37,12 @@ class Continuation:
 
             jac = self.interface.jacobian(x)
             dx = self.interface.solve(jac, -fval)
-
+           # if (k == 0):
+           #     prev_tol=tol
+           #     tol=tol/self.tol_check(jac,x)
+           #     print('tol check', prev_tol,tol)
+                
+            
             x = x + dx
 
             if residual_check != 'F' or verbose:
@@ -51,6 +59,36 @@ class Continuation:
 
         return x
 
+    def tol_check(self,jac_op,x):
+      unit_round=1e-14
+      jac=jac_op @ identity(x.size,format='csr')
+      #jac=jac_op
+      #print(jac.diagonal())
+      #detect the identity rows and romove them
+      jd = scipy.sparse.diags(jac.diagonal())
+      #print((numpy.abs(jac-jd)).sum(axis=1))
+      #sum the absolute values of each row of the off-diagonal elements
+      dumv=(numpy.abs(jac-jd)).sum(axis=1)
+      for r in range(0,x.size):                   
+        if dumv[r]==0.0:
+          jac[r,r]=0
+      #print((numpy.abs(jac[0::4,0::4])).max())
+      #print(jac[0::4,0::4].multiply(jac[0::4,0::4].sign()))
+      #print(jac[0::4,0::4].sabs().max())
+      #print(scipy.linalg.norm(jac))
+      #Compute 
+      maxJ=numpy.zeros((4,4))
+      maxx=numpy.zeros(4)
+      maxJx=numpy.zeros((4,4))
+      for r in range(0,4):
+        maxx[r]=numpy.linalg.norm(x[r::4],ord=numpy.inf) 
+        for r in range(0,4):
+          for c in  range(0,4):
+            maxJ[r,c]=(numpy.abs(jac[r::4,c::4])).max()
+            maxJx[r,c]=maxJ[r,c]*maxx[c]
+      #print('maxJ \n',maxJ,'\n maxx \n',maxx,'\n maxJx \n',maxJx)
+      return maxJx.max()
+    
     def newtoncorrector(self, parameter_name, ds, x, x0, mu, mu0):
         residual_check = self.parameters.get('Residual Check', 'F')
         verbose = self.parameters.get('Verbose', False)
@@ -65,6 +103,7 @@ class Continuation:
         dxnorm = None
 
         # Do the main iteration
+        scal_fact=1.0
         for k in range(maxit):
             # Compute F (RHS of 2.2.9)
             self.interface.set_parameter(parameter_name, mu)
@@ -74,11 +113,12 @@ class Continuation:
                 prev_norm = fnorm
                 fnorm = norm(fval)
 
-            if residual_check == 'F' and fnorm < tol:
+            if residual_check == 'F' and fnorm < tol*scal_fact:
                 print('Newton corrector converged in %d iterations with ||F||=%e' % (k, fnorm), flush=True)
                 break
 
-            if residual_check == 'F' and prev_norm is not None and prev_norm < fnorm:
+            if residual_check == 'F' and prev_norm is not None and 2*prev_norm <fnorm:
+                print(prev_norm,fnorm)
                 self.newton_iterations = maxit
                 break
 
@@ -88,7 +128,9 @@ class Continuation:
 
             # Compute the jacobian F_x at x (LHS of 2.2.9)
             jac = self.interface.jacobian(x)
-
+            if (k == 1):
+                scal_fact=self.tol_check(jac,x)
+                print('scaling factor', scal_fact)
             # Compute F_mu (LHS of 2.2.9)
             self.interface.set_parameter(parameter_name, mu + self.delta)
             dflval = (self.interface.rhs(x) - fval) / self.delta
@@ -132,6 +174,7 @@ class Continuation:
                 break
 
         if self.newton_iterations == maxit:
+            print(maxit)
             print('Newton did not converge. Adjusting step size and trying again', flush=True)
             return x0, mu0
 
@@ -139,20 +182,20 @@ class Continuation:
 
         return x, mu
 
-    def adjust_step_size(self, ds):
+    def adjust_step_size(self, ds, min_step_size, max_step_size):
         ''' Step size control, see [Seydel p 188.] '''
 
-        min_step_size = self.parameters.get('Minimum Step Size', 0.01)
-        max_step_size = self.parameters.get('Maximum Step Size', 2000)
+        min_step_size = self.parameters.get('Minimum Step Size', min_step_size )
+        max_step_size = self.parameters.get('Maximum Step Size', max_step_size )
         optimal_newton_iterations = self.parameters.get('Optimal Newton Iterations', 3)
 
         factor = optimal_newton_iterations / max(self.newton_iterations, 1)
         factor = min(max(factor, 0.5), 2.0)
-
+        print('old ds',ds)
         ds *= factor
 
         ds = math.copysign(min(max(abs(ds), min_step_size), max_step_size), ds)
-
+        print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
         if self.parameters.get('Verbose', False):
             print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
 
@@ -197,7 +240,7 @@ class Continuation:
 
         return x, mu
 
-    def step(self, parameter_name, x, mu, dx, dmu, ds):
+    def step(self, parameter_name, x, mu, dx, dmu, ds, min_step_size=None, max_step_size=None):
         ''' Perform one step of the continuation '''
 
         mu0 = mu
@@ -213,11 +256,14 @@ class Continuation:
         if mu == mu0:
             # No convergence was achieved, adjusting the step size
             prev_ds = ds
-            ds = self.adjust_step_size(ds)
+            ds = self.adjust_step_size(ds,min_step_size,max_step_size)
+            print(prev_ds,ds)
+            print(min_step_size)
+            print(max_step_size)
             if prev_ds == ds:
                 raise Exception('Newton cannot achieve convergence')
 
-            return self.step(parameter_name, x0, mu0, dx, dmu, ds)
+            return self.step(parameter_name, x0, mu0, dx, dmu, ds, min_step_size, max_step_size)
 
         print("%s: %f" % (parameter_name, mu), flush=True)
 
@@ -299,7 +345,7 @@ class Continuation:
 
         # Scaling of the initial tangent (2.2.7)
         dmu = 1
-        nrm = sqrt(self.zeta * dx.dot(dx) + dmu ** 2)
+        nrm = sqrt(self.zeta * dx.dot(dx) + (1-self.zeta)*dmu ** 2)
         dmu /= nrm
         dx /= nrm
 
@@ -307,7 +353,7 @@ class Continuation:
 
     def continuation(self, x0, parameter_name, start, target, ds,
                      dx=None, dmu=None,
-                     maxit=None, switched_branches=False):
+                     maxit=None, switched_branches=False, last_ds=False):
         '''Perform a pseudo-arclength continuation in parameter_name from
         parameter value start to target with arclength step size ds,
         and starting from an initial state x0.
@@ -325,9 +371,12 @@ class Continuation:
 
         x = x0
         mu = start
-
+        min_step_size=(target-start)/1000
+        max_step_size=(target-start)/5
+        print('max step size ',max_step_size)
+        unit_round=1e-16
         # Set some parameters
-        self.delta = self.parameters.get('Delta', 1)
+        self.delta = self.parameters.get('Delta', max(abs(start),abs(target))*sqrt(unit_round))
         self.zeta = 1 / x.size
 
         if not dx or not dmu:
@@ -351,7 +400,7 @@ class Continuation:
         for j in range(maxit):
             mu0 = mu
 
-            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds)
+            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds, min_step_size=min_step_size, max_step_size=max_step_size)
 
             if detect_bifurcations or (enable_branch_switching and not switched_branches):
                 eig_prev = eig
@@ -378,8 +427,14 @@ class Continuation:
                 # Converge onto the end point
                 x, mu = self.converge(parameter_name, x, mu, dx, dmu, target, ds, maxit)
 
-                return x, mu
+                if last_ds:
+                   return x,mu,ds
+                else:
+                   return x, mu
 
-            ds = self.adjust_step_size(ds)
-
-        return x, mu
+            ds = self.adjust_step_size(ds,min_step_size,max_step_size)
+        print(last_ds)
+        if last_ds:
+          return x,mu,ds
+        else:
+          return x, mu

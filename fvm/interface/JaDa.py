@@ -30,10 +30,10 @@ class Op:
         self.shape = (mat.n, mat.n)
 
     def matvec(self, x):
-        return self.mat * x
+        return self.mat @ x
 
     def __matmul__(self, x):
-        return self.mat * x
+        return self.mat @ x
 
 class CachedMatrix:
     def __init__(self, matrix, alpha, beta):

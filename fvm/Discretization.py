@@ -72,12 +72,12 @@ class Discretization:
         if self.nz == 1:
             self.z_periodic = True
 
-        self.x = self.get_coordinate_vector(self.parameters.get('X-min', 0.0), self.parameters.get('X-max', 1.0),
-                                            self.nx) if x is None else x
-        self.y = self.get_coordinate_vector(self.parameters.get('Y-min', 0.0), self.parameters.get('Y-max', 1.0),
-                                            self.ny) if y is None else y
-        self.z = self.get_coordinate_vector(self.parameters.get('Z-min', 0.0), self.parameters.get('Z-max', 1.0),
-                                            self.nz) if z is None else z
+        #self.x = self.get_coordinate_vector(self.parameters.get('X-min', 0.0), self.parameters.get('X-max', 1.0),
+        #                                    self.nx) if x is None else x
+        #self.y = self.get_coordinate_vector(self.parameters.get('Y-min', 0.0), self.parameters.get('Y-max', 1.0),
+        #                                    self.ny) if y is None else y
+        #self.z = self.get_coordinate_vector(self.parameters.get('Z-min', 0.0), self.parameters.get('Z-max', 1.0),
+        #                                    self.nz) if z is None else z
 
         self.atom = None
         self.recompute_linear_part = True
@@ -238,7 +238,15 @@ class Discretization:
 
     def rhs(self, state):
         '''Right-hand side in M * du / dt = F(u).'''
-
+        x=None
+        y=None
+        z=None
+        self.x = self.get_coordinate_vector(self.parameters.get('X-min', 0.0), self.parameters.get('X-max', 1.0),
+                                            self.nx) if x is None else x
+        self.y = self.get_coordinate_vector(self.parameters.get('Y-min', 0.0), self.parameters.get('Y-max', 1.0),
+                                            self.ny) if y is None else y
+        self.z = self.get_coordinate_vector(self.parameters.get('Z-min', 0.0), self.parameters.get('Z-max', 1.0),
+                                            self.nz) if z is None else z
         atomJ, atomF = self.nonlinear_part(state)
         atomF += self.linear_part()
 
@@ -249,6 +257,15 @@ class Discretization:
     def bilinear(self, state1, state2):
         '''Evaluation of bilinear form 
         in right-hand side in M * du / dt = F(u).'''
+        x=None
+        y=None
+        z=None
+        self.x = self.get_coordinate_vector(self.parameters.get('X-min', 0.0), self.parameters.get('X-max', 1.0),
+                                            self.nx) if x is None else x
+        self.y = self.get_coordinate_vector(self.parameters.get('Y-min', 0.0), self.parameters.get('Y-max', 1.0),
+                                            self.ny) if y is None else y
+        self.z = self.get_coordinate_vector(self.parameters.get('Z-min', 0.0), self.parameters.get('Z-max', 1.0),
+                                            self.nz) if z is None else z
 
         atomJ, atomF = self.nonlinear_part(state1)
 
@@ -258,7 +275,15 @@ class Discretization:
 
     def jacobian(self, state):
         '''Jacobian J of F in M * du / dt = F(u).'''
-
+        x=None
+        y=None
+        z=None
+        self.x = self.get_coordinate_vector(self.parameters.get('X-min', 0.0), self.parameters.get('X-max', 1.0),
+                                            self.nx) if x is None else x
+        self.y = self.get_coordinate_vector(self.parameters.get('Y-min', 0.0), self.parameters.get('Y-max', 1.0),
+                                            self.ny) if y is None else y
+        self.z = self.get_coordinate_vector(self.parameters.get('Z-min', 0.0), self.parameters.get('Z-max', 1.0),
+                                            self.nz) if z is None else z
         atomJ, atomF = self.nonlinear_part(state)
         atomJ += self.linear_part()
 
@@ -268,7 +293,15 @@ class Discretization:
 
     def mass_matrix(self):
         '''Mass matrix M in M * du / dt = F(u).'''
-
+        x=None
+        y=None
+        z=None
+        self.x = self.get_coordinate_vector(self.parameters.get('X-min', 0.0), self.parameters.get('X-max', 1.0),
+                                            self.nx) if x is None else x
+        self.y = self.get_coordinate_vector(self.parameters.get('Y-min', 0.0), self.parameters.get('Y-max', 1.0),
+                                            self.ny) if y is None else y
+        self.z = self.get_coordinate_vector(self.parameters.get('Z-min', 0.0), self.parameters.get('Z-max', 1.0),
+                                            self.nz) if z is None else z
         atom = self.mass_x() + self.mass_y()
         if self.dim == 3:
             atom += self.mass_z()
