@@ -118,7 +118,7 @@ class Continuation:
                 break
 
             if residual_check == 'F' and prev_norm is not None and 2*prev_norm <fnorm:
-                print(prev_norm,fnorm)
+                print('previous norm %e, current norm f %e' %(prev_norm,fnorm))
                 self.newton_iterations = maxit
                 break
 
@@ -130,7 +130,7 @@ class Continuation:
             jac = self.interface.jacobian(x)
             if (k == 1):
                 scal_fact=self.tol_check(jac,x)
-                print('scaling factor', scal_fact)
+                print('scaling factor%e' % (scal_fact))
             # Compute F_mu (LHS of 2.2.9)
             self.interface.set_parameter(parameter_name, mu + self.delta)
             dflval = (self.interface.rhs(x) - fval) / self.delta
@@ -174,7 +174,7 @@ class Continuation:
                 break
 
         if self.newton_iterations == maxit:
-            print(maxit)
+            print('maxit ',maxit)
             print('Newton did not converge. Adjusting step size and trying again', flush=True)
             return x0, mu0
 
@@ -191,9 +191,9 @@ class Continuation:
 
         factor = optimal_newton_iterations / max(self.newton_iterations, 1)
         factor = min(max(factor, 0.5), 2.0)
-        print('old ds',ds)
+        print('old ds %e' % (ds))
         ds *= factor
-
+        print('min %e, max %e step sizes' % (min_step_size, max_step_size), flush=True)
         ds = math.copysign(min(max(abs(ds), min_step_size), max_step_size), ds)
         print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
         if self.parameters.get('Verbose', False):
@@ -253,19 +253,20 @@ class Continuation:
         # Corrector (2.2.9 and onward)
         x, mu = self.newtoncorrector(parameter_name, ds, x, x0, mu, mu0)
 
-        if mu == mu0:
+        if mu == mu0 and (x==x0).all() :
             # No convergence was achieved, adjusting the step size
-            prev_ds = ds
+            prev_ds = ds*1.0
+            type(ds)
+            print('previous ds=%e ' % prev_ds)
             ds = self.adjust_step_size(ds,min_step_size,max_step_size)
-            print(prev_ds,ds)
-            print(min_step_size)
-            print(max_step_size)
+            print('previous d=%e, new ds=%e' % (prev_ds,ds) )
+            print('min=%e and max=%e stepsizes' % (min_step_size, max_step_size))
             if prev_ds == ds:
                 raise Exception('Newton cannot achieve convergence')
 
             return self.step(parameter_name, x0, mu0, dx, dmu, ds, min_step_size, max_step_size)
 
-        print("%s: %f" % (parameter_name, mu), flush=True)
+        print("%s: %e" % (parameter_name, mu), flush=True)
 
         if 'Postprocess' in self.parameters and self.parameters['Postprocess']:
             self.parameters['Postprocess'](self.interface, x, mu)
@@ -275,6 +276,7 @@ class Continuation:
         dx = x - x0
 
         if abs(dmu) < 1e-12:
+#FW I do not get this. dx could still be considerable. Probably you mean ds too small? 
             raise Exception('dmu too small')
 
         # Compute the tangent (2.2.4)
@@ -373,7 +375,7 @@ class Continuation:
         mu = start
         min_step_size=(target-start)/1000
         max_step_size=(target-start)/5
-        print('max step size ',max_step_size)
+        print('max step size %e' % (max_step_size))
         unit_round=1e-16
         # Set some parameters
         self.delta = self.parameters.get('Delta', max(abs(start),abs(target))*sqrt(unit_round))
@@ -433,7 +435,7 @@ class Continuation:
                    return x, mu
 
             ds = self.adjust_step_size(ds,min_step_size,max_step_size)
-        print(last_ds)
+        #print(last_ds)
         if last_ds:
           return x,mu,ds
         else:
