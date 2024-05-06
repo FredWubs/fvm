@@ -136,6 +136,20 @@ def test_bilin_stretched():
         for j in range(A.begA[i], A.begA[i+1]):
             assert i != A.jcoA[j] or A.coA[j] == -1
 
+def test_bilinear_stretched():
+    parameters, nx, ny, nz, dim, dof, x, y, z = create_test_problem()
+
+    x = utils.create_stretched_coordinate_vector(0, 1, nx, 1.5)
+    y = utils.create_stretched_coordinate_vector(0, 1, ny, 1.5)
+    z = utils.create_stretched_coordinate_vector(0, 1, nz, 1.5)
+
+    discretization = Discretization(parameters, nx, ny, nz, dim, dof, x, y, z)
+    state1 = create_divfree_state(discretization)
+    state2 = create_divfree_state(discretization)
+    lin_part = discretization.jacobian(0 * state1) @ state2
+    bilin_par=lin_part+discretization.bilinear(state1,state2) + discretization.bilinear(state2,state1)-discretization.jacobian(state1) @ state2
+    assert numpy.linalg.norm(bilin_par) < 10 ** -7
+
 def test_jac_consistency():
     parameters, nx, ny, nz, dim, dof, x, y, z = create_test_problem()
 
@@ -263,3 +277,7 @@ def test_jac_consistency_tc_stretched():
         eps2 = 3 * max(eps, 10 ** (-14+i))
         rhs2 = discretization.rhs(state + eps * pert)
         assert numpy.linalg.norm((rhs2 - rhs) / eps - A @ pert) < eps2
+
+''' if __name__ == '__main__':
+    test_bilinear_stretched()
+'''

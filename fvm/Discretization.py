@@ -245,6 +245,16 @@ class Discretization:
         frc = self.boundaries(atomF)
 
         return self.assemble_rhs(state, atomF) + frc
+    
+    def bilinear(self, state1, state2):
+        '''Evaluation of bilinear form 
+        in right-hand side in M * du / dt = F(u).'''
+
+        atomJ, atomF = self.nonlinear_part(state1)
+
+        frc = self.boundaries(atomF)
+
+        return self.assemble_rhs(state2, atomF) + frc 
 
     def jacobian(self, state):
         '''Jacobian J of F in M * du / dt = F(u).'''
