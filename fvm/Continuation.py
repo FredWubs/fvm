@@ -195,7 +195,7 @@ class Continuation:
         ds *= factor
         print('min %e, max %e step sizes' % (min_step_size, max_step_size), flush=True)
         ds = math.copysign(min(max(abs(ds), min_step_size), max_step_size), ds)
-        print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
+#        print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
         if self.parameters.get('Verbose', False):
             print('New stepsize: ds=%e, factor=%e' % (ds, factor), flush=True)
 
