@@ -69,15 +69,15 @@ class BaseInterface:
         from jadapy import jdqz, orthogonalization
 
         parameters = self.parameters.get('Eigenvalue Solver', {})
-        arithmetic = parameters.get('Arithmetic', 'complex')
-        target = parameters.get('Target', 0.0)
-        initial_subspace_dimension = parameters.get('Initial Subspace Dimension', 0)
-        subspace_dimensions = [parameters.get('Minimum Subspace Dimension', 30),
-                               parameters.get('Maximum Subspace Dimension', 60)]
-        enable_recycling = parameters.get('Recycle Subspaces', enable_recycling)
-        tol = parameters.get('Tolerance', 1e-7)
-        num = parameters.get('Number of Eigenvalues', 5)
-
+        arithmetic = self.parameters.get('Arithmetic', 'complex')
+        target = self.parameters.get('Target', 0.0)
+        initial_subspace_dimension = self.parameters.get('Initial Subspace Dimension', 0)
+        subspace_dimensions = [self.parameters.get('Minimum Subspace Dimension', 30),
+                               self.parameters.get('Maximum Subspace Dimension', 60)]
+        enable_recycling = self.parameters.get('Recycle Subspaces', enable_recycling)
+        tol = self.parameters.get('Tolerance', 1e-7)
+        num = self.parameters.get('Number of Eigenvalues', 5)
+        print('recycling ',enable_recycling)
         if not enable_recycling:
             self._subspaces = None
 
@@ -100,13 +100,14 @@ class BaseInterface:
             V[:, k] = jada_interface.random()
             orthogonalization.orthonormalize(V[:, 0:k], V[:, k])
 
-            gamma = numpy.sqrt(1 + abs(target) ** 2)
-            W = jada_interface.vector(k + 1)
-            W[:, 0:k] = self._subspaces[1]
-            W[:, k] = (jac_op @ V[:, k]) * (1 / gamma) - (mass_op @ V[:, k]) * (target / gamma)
-            orthogonalization.orthonormalize(W[:, 0:k], W[:, k])
+            #gamma = numpy.sqrt(1 + abs(target) ** 2)
+            #W = jada_interface.vector(k + 1)
+            #W[:, 0:k] = self._subspaces[1]
+            #W[:, k] = (jac_op @ V[:, k]) * (1 / gamma) - (mass_op @ V[:, k]) * (target / gamma)
+            #orthogonalization.orthonormalize(W[:, 0:k], W[:, k])
 
-            self._subspaces = [V, W]
+            #self._subspaces = [V, W]
+            self._subspaces = [V,]
 
         result = jdqz.jdqz(jac_op, mass_op, num, tol=tol, subspace_dimensions=subspace_dimensions, target=target,
                            interface=jada_interface, arithmetic=arithmetic, prec=prec_op,

@@ -317,10 +317,12 @@ class Interface(BaseInterface):
         prec = None
 
         if self.parameters.get('Bordered Solver', False):
+            print('I use the bordered solver')
             from fvm.interface.JaDa import BorderedInterface as JaDaInterface
         else:
+            print('no bordered solver')
             from fvm.interface.JaDa import Interface as JaDaInterface
-
+        print('parameters', self.parameters.get('Tolerance'))
         jada_interface = JaDaInterface(self, jac_op, mass_op, jac_op.shape[0], numpy.complex128)
         if arithmetic == 'real':
             jada_interface = JaDaInterface(self, jac_op, mass_op, jac_op.shape[0])
