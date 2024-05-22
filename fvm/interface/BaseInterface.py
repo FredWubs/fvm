@@ -66,7 +66,7 @@ class BaseInterface:
     def _eigs(self, jada_interface, jac_op, mass_op, prec_op, state, return_eigenvectors, enable_recycling):
         '''Internal helper for eigs()'''
 
-        from jadapy import jdqz, orthogonalization
+        from jadapy import jdqz_im_ax, orthogonalization
 
         parameters = self.parameters.get('Eigenvalue Solver', {})
         arithmetic = self.parameters.get('Arithmetic', 'complex')
@@ -109,7 +109,7 @@ class BaseInterface:
             #self._subspaces = [V, W]
             self._subspaces = [V,]
 
-        result = jdqz.jdqz(jac_op, mass_op, num, tol=tol, subspace_dimensions=subspace_dimensions, target=target,
+        result = jdqz_im_ax.jdqz(jac_op, mass_op, num, tol=tol, subspace_dimensions=subspace_dimensions, target=target,
                            interface=jada_interface, arithmetic=arithmetic, prec=prec_op,
                            return_eigenvectors=return_eigenvectors, return_subspaces=True,
                            initial_subspaces=self._subspaces)
