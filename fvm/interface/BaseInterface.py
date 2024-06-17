@@ -63,7 +63,7 @@ class BaseInterface:
         '''Solve J y = x for y.'''
         raise NotImplementedError()
 
-    def _eigs(self, jada_interface, jac_op, mass_op, prec_op, state, return_eigenvectors, enable_recycling):
+    def _eigs(self, jada_interface, jac_op, mass_op, prec_op, state, return_eigenvectors, enable_recycling, suppl_subs=None, suppl_subs_b=False):
         '''Internal helper for eigs()'''
 
         from jadapy import jdqz_im_ax, orthogonalization
@@ -76,7 +76,9 @@ class BaseInterface:
                                self.parameters.get('Maximum Subspace Dimension', 60)]
         enable_recycling = self.parameters.get('Recycle Subspaces', enable_recycling)
         tol = self.parameters.get('Tolerance', 1e-7)
-        num = self.parameters.get('Number of Eigenvalues', 5)
+        num = self.parameters.get('Number of Eigenvalues Inner Iteration', 5)
+        max_cnt = self.parameters.get('Number of Outer Iterations', 5)
+        return_matrix = self.parameters.get('Return Matrices',False)
         print('recycling ',enable_recycling)
         if not enable_recycling:
             self._subspaces = None
@@ -108,14 +110,21 @@ class BaseInterface:
 
             #self._subspaces = [V, W]
             self._subspaces = [V,]
+        if suppl_subs_b:
+            orthogonalization.orthonormalize(suppl_subs)
+            self._subspaces = [suppl_subs,]
+            print('supplied subspace')
 
-        result = jdqz_im_ax.jdqz(jac_op, mass_op, num, tol=tol, subspace_dimensions=subspace_dimensions, target=target,
+        print('Return Matrices ',return_matrix)
+        result = jdqz_im_ax.jdqz(jac_op, mass_op, num, max_cnt=max_cnt+1, tol=tol, 
+                           subspace_dimensions=subspace_dimensions, target=target,
                            interface=jada_interface, arithmetic=arithmetic, prec=prec_op,
                            return_eigenvectors=return_eigenvectors, return_subspaces=True,
-                           initial_subspaces=self._subspaces)
+                           initial_subspaces=self._subspaces,return_matrix=return_matrix)
 
         if return_eigenvectors:
             alpha, beta, v, q, z = result
+            orthogonalization.orthonormalize(q)
             self._subspaces = [q, z]
             idx = range(len(alpha))
             idx = sorted(idx, key=lambda i: -(alpha[i] / beta[i]).real if (alpha[i] / beta[i]).real < 100 else 100)
@@ -125,12 +134,16 @@ class BaseInterface:
             for i in range(len(idx)):
                 w[:, i] = v[:, idx[i]]
                 eigs[i] = alpha[idx[i]] / beta[idx[i]]
-            return eigs[:num], w
+            return eigs[:len(idx)], w
+        elif return_matrix:
+            alpha, beta, v, q, z = result
+            return alpha,beta,v,q,z
         else:
             alpha, beta, q, z = result
+            orthogonalization.orthonormalize(q)
             self._subspaces = [q, z]
             eigs = numpy.array(sorted(alpha / beta, key=lambda x: -x.real if x.real < 100 else 100))
-            return eigs[:num]
+            return eigs[:len(alpha)]
 
     def eigs(self, state, return_eigenvectors=False, enable_recycling=False):
         '''Compute the generalized eigenvalues of beta * J(x) * v = alpha * M * v.'''

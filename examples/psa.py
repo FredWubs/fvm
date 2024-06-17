@@ -79,7 +79,11 @@ def psa(A,fname):
 
     # Plot contours
     fld=np.log10(sigmin + 1e-20)
-    maxfld=round(np.max(fld))
+    maxfld=np.max(fld)
+    if not np.isinf(maxfld):
+      maxfld=round(maxfld)
+    else:
+      return
     minfld=round(np.min(fld))
     levels=minfld+(maxfld-minfld)*np.arange(0, 1.1 ,0.1)
     plt.contour(x, y, fld , levels=minfld+(maxfld-minfld)*np.arange(0, 1.1 ,0.1))

@@ -18,7 +18,7 @@ from fvm import plot_utils
 from fvm import Continuation
 from fvm import Interface
 
-from jadapy import jdqz2
+from jadapy import jdqz_im_ax
 from jadapy.orthogonalization import orthonormalize
 
 import matplotlib.pyplot as plt
@@ -86,11 +86,6 @@ def fovs(A, B):
     
     Ha = numpy.linalg.inv(B) @ A
     fa, e = fv(Ha)
-#    print('fa')
-#    for line in fa.real:
-#      print('%e' % line)
-#    for line in fa.imag:
-#      print('%e' % line)
 
     #plt.axis('equal')
     plt.plot(e.real, e.imag, 'o')
@@ -115,27 +110,35 @@ def fovs(A, B):
 
 # initialize        
 dim = 2
-dof = 4
+dof = 3
 nx = 64
 ny = nx
 nz = 1
 n = dof * nx * ny * nz
 
 # Define the problem
-parameters = {'Problem Type': 'Differentially Heated Cavity',
+parameters = {'Problem Type': 'Lid-driven Cavity',
               # Problem parameters
-              'Rayleigh Number': 1,
-              'Prandtl Number': 1000.,
               'Reynolds Number': 1,
-              # Problem size
-              'X-max': 0.051,
-              'Y-max': 1,
+              'Lid Velocity': 1,
+              # Use a stretched grid
+              'Grid Stretching Factor': 1.5,
               # Set a maximum step size ds
               # 'Maximum Step Size': 1e8,
               # Set a smaller Newton tolerance
+              'Y-max': 1.0,
+              'X-max': 1.0,
               'Newton Tolerance': 1e-14,
-              'Optimal Newton Iterations': 4,
               'Delta': 1.0,
+              'Detect Bifurcation Points': True,
+              'Destination Tolerance':1e-13,
+              'Bordered Solver': False,
+              #'Recycle Subspaces':False,
+              'Tolerance':1e-13,
+              'Number of Eigenvalues Inner Iteration': 5,
+              'Number of Outer Iterations': 10,
+              'Minimum Subspace Dimension': 50,
+              'Maximum Subspace Dimension': 80,
               # Give back extra output (this is also more expensive)
               'Verbose': False}
 
@@ -148,9 +151,10 @@ x0 = numpy.zeros(dof * nx * ny * nz)
 
 previous_subspaces = None
 
-# Rayleigh numbers to compute the fov at
-data_points = [  2.88e9, 3.e12]
-#data_points = [ 6.99e+07]
+# Re numbers to compute the fov at
+#data_points = [2.e4, 3.e12]
+data_points = [  1.e4]
+#data_points = [8.65e+07]
 #data_points = [ 1.3e15, 3.e16, 3.e17, 3.e18  ]
 #eigs = numpy.zeros([len(data_points), 10], dtype=numpy.complex128)
 
@@ -160,8 +164,8 @@ AspRat=parameters.get('Y-max')/parameters.get('X-max')
 mu=0.0
 ds=data_points[0]/10
 if True:
-    target=3.e8
-    restart=numpy.load(f'Results_Ra={target:.3}_A={AspRat:.3}.npz')
+    target=6.e3
+    restart=numpy.load(f'Results_Re={target:.3}_A={AspRat:.3}.npz')
     x0=restart['x']
     A=restart['A']
     B=restart['B']
@@ -175,14 +179,27 @@ if True:
     print(q.size)
     print(len(q))
     print(len(q[0]))
+    stop_run=False
 for i, target in enumerate(data_points):
-    x, mu, ds = continuation.continuation(x0, 'Rayleigh Number', mu, target, ds, last_ds=True)
+    if stop_run==True:
+        break
+    interface.set_parameter('Return Matrices',False)
+
+    tic_cont=time.perf_counter()
+    x, mu, ds = continuation.continuation(x0, 'Reynolds Number', mu, target, ds, last_ds=True)
+    toc_cont=time.perf_counter()
+    print(f"Continuation took {toc_cont - tic_cont:0.4f} seconds")
     x0 = x
+    print('Reynolds number', mu, interface.parameters.get('Reynolds Number'))
+    if parameters.get('Detect Bifurcation Points')==True:
+        target=mu
+        stop_run=True
 
     # Compute the eigenvalues of the generalized eigenvalue problem
     jac_op = JaDa.Op(interface.jacobian(x))
     mass_op = JaDa.Op(interface.mass_matrix())
-    # jada_interface = JaDa.Interface(interface, jac_op, mass_op, n, numpy.complex128)
+    #The non-bordered interface stalls
+    #jada_interface = JaDa.Interface(interface, jac_op, mass_op, n, numpy.complex128)
     jada_interface = JaDa.BorderedInterface(interface, jac_op, mass_op, n, numpy.complex128)
 
     #For estimating the smallest tolerance possible
@@ -219,27 +236,42 @@ for i, target in enumerate(data_points):
          maxJx[r,c]=maxJ[r,c]*maxx[c]
     print('maxJ \n',maxJ,'\n maxx \n',maxx,'\n maxJx \n',maxJx)
     #time.sleep()
-         
     print(i)
-    if i>0:
+    if False:
       print('check jdqz result before')
       print('orthogonality q \n',scipy.linalg.norm(q[:,:num].T.conj() @ q[:,:num]-numpy.identity(num)))
       print('orthogonality z \n', scipy.linalg.norm(z[:,:num].T.conj() @ z[:,:num]-numpy.identity(num)))
       print('approx A \n', scipy.linalg.norm(z[:,:num].T.conj() @ (jac_op @ q[:,:num])-Asav[:num,:num]))
       print('approx B \n', scipy.linalg.norm(z[:,:num].T.conj() @ (mass_op @ q[:,:num])-Bsav[:num,:num]))
 
-    num=40
+    num=5
     #A, B, q, z = jdqz2.jdqz(jac_op, mass_op, num=num, tol=1e-12, subspace_dimensions=[30, 60], target=0,
     #                              interface=jada_interface, arithmetic='complex', prec=jada_interface.shifted_prec,
     #
-    if True:
-      A, B, q, z = jdqz2.jdqz(jac_op, mass_op, num=num, tol=1e-13, subspace_dimensions=[num, num+20], target=0.0+2.0j,
+    max_cnt=4
+    start_target_ev=2.7j
+    tic=time.perf_counter()
+
+    interface.set_parameter('Return Matrices',True)         
+    interface.set_parameter('Number of Eigenvalues Inner Iteration',50)         
+    A, B, v, q, z = interface.eigs(x, return_eigenvectors=False, enable_recycling=True)
+    if False:
+      if True:
+        A, B, v, q, z = jdqz_im_ax.jdqz(jac_op, mass_op, max_cnt=max_cnt+1, num=num, tol=1e-13,
+                subspace_dimensions=[max_cnt*num, max_cnt*num+20], target=start_target_ev,
                                   interface=jada_interface, arithmetic='complex',
                                   initial_subspaces=previous_subspaces, return_matrix=True)
-    else:
-      A, B, q, z = jdqz2.jdqz(jac_op, mass_op, num=num, tol=1e-12, subspace_dimensions=[num, num+20], target=0,
+      else:
+        A, B, v, q, z = jdqz_im_ax.jdqz(jac_op, mass_op, max_cnt=max_cnt, num=num, tol=1e-12,
+                subspace_dimensions=[num, num+20], target=start_target,
                               interface=jada_interface, arithmetic='complex',
                               return_matrix=True)
+    toc=time.perf_counter()
+    print(f"Eigenvalue computation took {toc - tic:0.4f} seconds")
+
+    num=A.shape[0] 
+    print(A.shape,B.shape,q.shape,z.shape)
+
     #previous_subspaces = (q, z)
     previous_subspaces = (q,)
     Asav=A.copy()
@@ -265,8 +297,9 @@ for i, target in enumerate(data_points):
     orthonormalize(q_M, M=mass_op)
     #print(q_M.T.conj()@(mass_op @ q[:,:num]))
     R_M=q_M.T.conj()@(mass_op@q[:,:num])
+    print('R for M-orthogonal basis')
     print(numpy.matrix(R_M))
-    print(scipy.linalg.norm(q[:,:num]-(q_M @ R_M)))
+    print('M-orthogonalization error=', scipy.linalg.norm(q[:,:num]-(q_M @ R_M)))
     print('before M innerproduct')
     print(numpy.diag(numpy.linalg.solve(B[:num,:num],A[:num,:num])))
 #%% plot the fields of values
@@ -278,22 +311,27 @@ for i, target in enumerate(data_points):
     B=B[:num,:num]
     fovs(A, B)
     #plt.legend(loc='lower left')
-    plt.title(f'Ra={target:.3}')
+    plt.title(f'Re={target:.3}')
 #%%    plt.show()
     #plt.axis('equal')
-    plt.savefig(f'FOV_Ra={target:.3}_A={AspRat:.3}.eps')
+    try: 
+        plt.savefig(f'FOV_Re={target:.3}_A={AspRat:.3}.eps')
+    except RuntimeError as error:
+        print(error)
+        print('Saving plot will be skipped')
     plt.clf()
     
 #%% compute Binv A t
-    ts = numpy.arange(0, 80000, 400)
+    t_end=400.
+    ts = numpy.arange(0, t_end, t_end/400.0)
     Binv = numpy.linalg.inv(B)
     R=Binv @ A
-    psa.psa(R,f'PS_Ra={target:.3}_A={AspRat:.3}.eps')
+    psa.psa(R,f'PS_Re={target:.3}_A={AspRat:.3}.eps')
     #print(numpy.matrix(R))
     vector=numpy.diag(R)
     print(vector)
     fil=open("Eigenvalues.txt","a")
-    fil.write(f'PS_Ra={target:.3}_A={AspRat:.3}\n')
+    fil.write(f'PS_Re={target:.3}_A={AspRat:.3}\n')
     #for line in vector:
     #numpy.savetxt(fil, vector, fmt='%2e\n')
     numpy.savetxt(fil, vector)
@@ -320,38 +358,42 @@ for i, target in enumerate(data_points):
        plt.plot(ts, ys)
        plt.yscale('log')
        plt.xlabel('t', fontsize=15)
-#%%    plt.title(f'Ra={target:.3}')
+#%%    plt.title(f'Re={target:.3}')
 #%%    plt.show()
        plt.ylabel('$||e^{B^{-1}At}||$', fontsize=15)
        plt.subplots_adjust(left=0.2, bottom=0.12)
-       plt.savefig(f'Exp_Ra={target:.3}_A={AspRat:.3}.eps')
+       try:
+         plt.savefig(f'Exp_Re={target:.3}_A={AspRat:.3}.eps')
+       except RuntimeError as error:
+         print(error)
+         print('Saving plot will be skipped')
        plt.close()
 #    plot_streamfunction(state, interface, axis=2, title='Streamfunction', *args, **kwargs)
     fig=plot_utils.plot_streamfunction(x, interface,show=False)
-    fig.savefig(f'Sol_Ra={target:.3}_A={AspRat:.3}.eps')
+    fig.savefig(f'Sol_Re={target:.3}_A={AspRat:.3}.eps')
     plt.close(fig='all')
     fig=plot_utils.plot_streamfunction(q[:,0], interface, show=False)
-    fig.savefig(f'Ev_Ra={target:.3}_A={AspRat:.3}.eps')
+    fig.savefig(f'Ev_Re={target:.3}_A={AspRat:.3}.eps')
 #    plot_utils.plot_velocity_magnitude(q[:,0], interface)
 #    plot_utils.plot_temperature(q[:,0], interface)
 
     plt.close(fig='all')
-    fig=plot_utils.plot_temperature(x, interface,show=False)
-    fig.savefig(f'SolT_Ra={target:.3}_A={AspRat:.3}.eps')
-    plt.close(fig='all')
-    fig=plot_utils.plot_temperature(q[:,0], interface, show=False)
-    fig.savefig(f'EvT_Ra={target:.3}_A={AspRat:.3}.eps')
-    plt.close(fig='all')
+    #fig=plot_utils.plot_temperature(x, interface,show=False)
+    #fig.savefig(f'SolT_Re={target:.3}_A={AspRat:.3}.eps')
+    #plt.close(fig='all')
+    #fig=plot_utils.plot_temperature(q[:,0], interface, show=False)
+    #fig.savefig(f'EvT_Re={target:.3}_A={AspRat:.3}.eps')
+    #plt.close(fig='all')
     
     fig=plot_utils.plot_pressure(x, interface,show=False)
-    fig.savefig(f'SolP_Ra={target:.3}_A={AspRat:.3}.eps')
+    fig.savefig(f'SolP_Re={target:.3}_A={AspRat:.3}.eps')
     plt.close(fig='all')
     fig=plot_utils.plot_pressure(q[:,0], interface, show=False)
-    fig.savefig(f'EvP_Ra={target:.3}_A={AspRat:.3}.eps')
+    fig.savefig(f'EvP_Re={target:.3}_A={AspRat:.3}.eps')
     plt.close(fig='all')
 
     if False:
-      fil=open(f'Results_Ra={target:.3}_A={AspRat:.3}',"w")
+      fil=open(f'Results_Re={target:.3}_A={AspRat:.3}',"w")
       fil.write('state')
       fil.write(" ".join(map(str,x)))
       fil.write('A\n')
@@ -372,4 +414,4 @@ for i, target in enumerate(data_points):
         fil.write(" ".join(map(str,line))) 
       fil.close()
 
-    numpy.savez(f'Results_Ra={target:.3}_A={AspRat:.3}',x=x,A=A,B=B,q=q,z=z,ds=ds)
+    numpy.savez(f'Results_Re={target:.3}_A={AspRat:.3}',x=x,A=Asav,B=Bsav,q=q,z=z,ds=ds)

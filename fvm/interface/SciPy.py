@@ -304,7 +304,7 @@ class Interface(BaseInterface):
 
         return self.direct_solve(jac, rhs, rhs2, V, W, C)
 
-    def eigs(self, state, return_eigenvectors=False, enable_recycling=False):
+    def eigs(self, state, return_eigenvectors=False, enable_recycling=False, suppl_subs=None, suppl_subs_b=False):
         '''Compute the generalized eigenvalues of beta * J(x) * v = alpha * M * v.'''
 
         from fvm.interface.JaDa import Op
@@ -324,6 +324,7 @@ class Interface(BaseInterface):
             from fvm.interface.JaDa import Interface as JaDaInterface
         print('parameters', self.parameters.get('Tolerance'))
         jada_interface = JaDaInterface(self, jac_op, mass_op, jac_op.shape[0], numpy.complex128)
+        #jada_interface = JaDaInterface(self, jac_op, mass_op, jac_op.shape[0], numpy.complex128, preconditioned_solve=True, shifted=True)
         if arithmetic == 'real':
             jada_interface = JaDaInterface(self, jac_op, mass_op, jac_op.shape[0])
 
@@ -331,4 +332,4 @@ class Interface(BaseInterface):
             prec = jada_interface.shifted_prec
 
         return self._eigs(jada_interface, jac_op, mass_op, prec, state, return_eigenvectors,
-                          enable_recycling)
+                          enable_recycling, suppl_subs, suppl_subs_b)

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#SBATCH --job-name LDC
+#SBATCH -n 1
+#SBATCH -N 1
+#SBATCH --cpus-per-task=4
+#SBATCH --time=30:00
+#SBATCH --mem=16G
+#SBATCH --mail-type=BEGIN,END
+#SBATCH --mail-user=f.w.wubs@rug.nl
+module load Python
+source ~/venvPython/bin/activate
+python LDC_Eigv.py 

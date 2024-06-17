@@ -113,7 +113,7 @@ class Continuation:
                 prev_norm = fnorm
                 fnorm = norm(fval)
 
-            if residual_check == 'F' and fnorm < tol*scal_fact:
+            if residual_check == 'F' and fnorm < tol*scal_fact and k > 0:
                 print('Newton corrector converged in %d iterations with ||F||=%e' % (k, fnorm), flush=True)
                 break
 
@@ -216,7 +216,13 @@ class Continuation:
         ''' Converge onto a bifurcation '''
 
         tol = self.parameters.get('Destination Tolerance', 1e-4)
+        self.interface.set_parameter('Return Matrices',True)
+        A, B, v, q, z = self.interface.eigs(x, return_eigenvectors=False, enable_recycling=True)
+        self.interface.set_parameter('Return Matrices',False)
 
+        self.interface.set_parameter('Number of Eigenvalues Inner Iteration', 10)
+        self.interface.set_parameter('Number of Outer Iterations', 1)
+        self.interface.set_parameter('Target', complex(0.0,eig.imag))
         for j in range(maxit):
             if abs(eig.real) < tol:
                 print("Bifurcation found at %s = %f with eigenvalue %e + %ei" % (
@@ -225,11 +231,13 @@ class Continuation:
 
             # Secant method
             ds = ds / deig.real * -eig.real
-            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds)
+            x, mu, dx, dmu, ds = self.step(parameter_name, x, mu, dx, dmu, ds, 0.0, 10*ds)
 
             eig_prev = eig
-            eigs, v = self.interface.eigs(x, return_eigenvectors=True, enable_recycling=True)
-            eig = eigs[0]
+            eigs, v = self.interface.eigs(x, return_eigenvectors=True, enable_recycling=True,  suppl_subs=q, suppl_subs_b=True)
+            arg_max=numpy.argmax(eigs.real)
+            eig = eigs[arg_max]
+            #eig = eigs[0]
             deig = eig - eig_prev
 
         return x, mu, v
@@ -291,9 +299,11 @@ class Continuation:
         dmu = mu - mu0
         dx = x - x0
 
-        if abs(dmu)+ norm(dx) < 1e-12*(abs(mu)+norm(x)):
+        if abs(dmu)+ norm(dx) < 1e-15*(abs(mu)+norm(x)):
 #FW I do not get this. dx co
-            raise Exception('ds too small')
+            #raise Exception('ds too small')
+            ds=1e-12*(abs(mu)+norm(x))
+            print('Warning: I adapted a too small ds')
 
         # Compute the tangent (2.2.4)
         dx /= ds
@@ -423,12 +433,42 @@ class Continuation:
             if detect_bifurcations or (enable_branch_switching and not switched_branches):
                 eig_prev = eig
                 eigs, v = self.interface.eigs(x, return_eigenvectors=True, enable_recycling=enable_recycling)
-                eig = eigs[0]
+                arg_max=numpy.argmax(eigs.real)
+                eig = eigs[arg_max]
                 enable_recycling = True
 
-                if eig_prev is not None and eig.real * eig_prev.real < 0:
+                if eig_prev is not None and eig.real * eig_prev.real < 0.0:
+                    print('Found positive eigenvalue', eig, arg_max)
+                    #There might be more than one positive eigenvalue, check this.
+                    ds_fix=-ds
+                    xdum=x
+                    mudum=mu
+                    dxdum=dx
+                    dmudum=dmu
+                    #print('eigs ', eigs[0:arg_max].real)
+                    #print(eigs.real)
+                    #print(eigs.imag)
+                    #print(eigs.shape, v.shape)
+                    #print(numpy.concatenate([eigs[:arg_max].real,eigs[arg_max+1:].real]))
+                    while (eig.real <0.0) or (eig.real>0.0 and  max(numpy.concatenate([eigs[:arg_max].real,eigs[arg_max+1:].real]))>0.0):
+                       #Another positive eigenvalue. Perform bisection to find the interval with one positive eigenvalue
+                       print('Bisection to find interval with single passing im. axis')
+                       ds_fix=ds_fix/2
+                       if eig.real >0.0: 
+                         x=xdum
+                         mu=mudum
+                         dx=dxdum
+                         dmudum=dmu
+                       xdum, mudum, dxdum, dmudum, ds = self.step(parameter_name, x, mu, dx, dmu, ds_fix, min_step_size=min_step_size, max_step_size=max_step_size) 
+                       eig_prev = eig
+                       eigs, v = self.interface.eigs(xdum, return_eigenvectors=True, enable_recycling=enable_recycling)
+                       arg_max=numpy.argmax(eigs.real)
+                       eig = eigs[arg_max]
+  
                     deig = eig - eig_prev
-                    x, mu, v = self.detect_bifurcation(parameter_name, x, mu, dx, dmu, eig, deig, v, ds, maxit)
+                    print('Eigenvalue target',eig)
+                    maxit_secant=20
+                    x, mu, v = self.detect_bifurcation(parameter_name, x, mu, dx, dmu, eig, deig, v, ds, maxit_secant)
 
                     if enable_branch_switching and not switched_branches:
                         switched_branches = True
