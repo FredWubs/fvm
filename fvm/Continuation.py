@@ -401,7 +401,8 @@ class Continuation:
         mu = start
         min_step_size=(target-start)/10000
         max_step_size=(target-start)/5
-        print('max step size %e' % (max_step_size))
+        print('Step size interval: [ %e, %e]' % (min_step_size,max_step_size))
+        print('Given step size: %e' % (ds))
         unit_round=1e-16
         # Set some parameters
         self.delta = self.parameters.get('Delta', max(abs(start),abs(target))*sqrt(unit_round))
